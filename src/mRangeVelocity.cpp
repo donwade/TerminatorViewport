@@ -87,11 +87,15 @@ void setup_c4001()
      * max Detection range Maximum distance, unit cm, range 2.4~20m (240~2000)
      * thres Target detection threshold, dimensionless unit 0.1, range 0~6553.5 (0~65535)
      */
-    if (radar.setDetectThres(/*min*/ 11, /*max*/ 2000, /*thres*/ 10))
+    if (radar.setDetectThres(/*min*/ 1234,
+    						 /*max*/ 2000,
+    						 /*thres*/ 18.))
         Serial.println("set detect threshold successfully");
 
     // set Fretting Detection
-    radar.setFrettingDetection(eON);
+    radar.setFrettingDetection(eOFF);
+    //radar.setFrettingDetection(eON);
+
 
     // get confige params
     Serial.print("min range = ");
@@ -109,30 +113,44 @@ void loop_c4001()
 {
 	static float fmax = -100;
 	static float fmin = 0;
+	static bool isIdle = true;
 	
-    Serial.print("target number = ");
-    Serial.println(radar.getTargetNumber()); // must exist
-    Serial.print("target Speed  = ");
-    Serial.print(radar.getTargetSpeed());
-    Serial.println(" m/s");
-
-    Serial.print("target range  = ");
-    Serial.print(radar.getTargetRange());
-    Serial.println(" m");
-
+	uint8_t tnum = radar.getTargetNumber();
+	float speedMpS =radar.getTargetSpeed();
+	float speedkpH = speedMpS * 60./ 1000.;
+	float range = radar.getTargetRange();
 	uint32_t energyNow = radar.getTargetEnergy();
-    Serial.print("target energy    = ");
-    Serial.println(energyNow);
-
-	if (energyNow)
-	{
-	    float dbNow = radar.getTargetEnergyDb();
-	    
-	    if (dbNow > fmax) fmax = dbNow;
-	    if (dbNow < fmin) fmin = dbNow;
-	    Serial.printf("%5.3f < %5.3f < %5.3f\n", fmin, dbNow, fmax);
-	    Serial.println();
-	}
 	
+    if (range)
+    {
+    	if (isIdle) Serial.println();
+    	
+    	isIdle = false;
+    	
+	    Serial.print("target number = ");
+	    Serial.println(tnum); // must exist
+	    Serial.printf("target Speed  = %4.1f m/S %4.1f kpH\n", speedMpS, speedkpH);
+
+	    Serial.print("target range  = ");
+	    Serial.print(range);
+	    Serial.println(" m");
+
+	    Serial.print("target energy    = ");
+	    Serial.println(energyNow);
+
+		if (energyNow)
+		{
+		    float dbNow = radar.getTargetEnergyDb();
+		    
+		    if (dbNow > fmax) fmax = dbNow;
+		    if (dbNow < fmin) fmin = dbNow;
+		    Serial.printf("%5.3f < %5.3f < %5.3f\n\n", fmin, dbNow, fmax);
+		}
+	}
+	else
+	{
+		Serial.print('.');
+		isIdle = true;
+	}
     delay(100);
 }
