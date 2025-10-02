@@ -1,8 +1,9 @@
 #include <Arduino.h>
 
-#include "src/mRangeVelocity.h"
+#include "mRangeVelocity.h"
 #include <M5Unified.h>
 #include <M5StackMenuSystem.h>
+#include "addin-ota.h"
 
 Menu mainMenu("Main Menu");
 Menu subMenu("Sub Menu");
@@ -11,9 +12,12 @@ void setup() {
 
 	M5.begin();
 	M5.Power.begin();
-
+	Serial.begin(115200);
+	while (!Serial) delay(1000);
+	
     setup_c4001();
-
+	setup_ota();
+	
 	mainMenu.addMenuItem("One Time Callback", callAndReturnUnattended);
 	mainMenu.addMenuItem("Loop Callback", initESCkeywithCB, showTickUntilESC);
 	mainMenu.addSubMenu("Submenu", &subMenu);
@@ -31,7 +35,8 @@ void loop() {
 	M5.update();
 
     loop_c4001(); 
-
+	loop_ota();
+	
 	if (mainMenu.isEnabled()) {
 		mainMenu.loop();
 	} else {
