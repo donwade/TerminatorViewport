@@ -1,1 +1,4 @@
-abuild m5-stackS2
+#!/bin/bash
+set -x
+abuild m5-stackS2 --dns_name terminator $*
+
