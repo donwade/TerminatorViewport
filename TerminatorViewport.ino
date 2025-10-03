@@ -8,13 +8,52 @@
 Menu mainMenu("Main Menu");
 Menu subMenu("Sub Menu");
 
+
+// include the library
+#include "AsyncTelnetSerial.h"
+
+
+//create an instance
+AsyncTelnetSerial TestInstance(&Serial); // <- link the HardwareSerial eg Serial or Serial1
+
+//declare the callbackfunctions if need any
+
+
+// in Setup() function
+void setup_telnet2serial()
+{
+  //setup your WiFi as usual,
+  //then attatch the callback functions to the declared instance
+  //then call the begin() function ->
+  // default baudrate = 115200, default LinkTelnetToSerial = true, default mDNS = false!
+  TestInstance.begin(115200, true, false);
+}
+
 void setup() {
 
 	M5.begin();
 	M5.Power.begin();
+	
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(MY_SSID, MY_SSID_PASSWORD);
+
+    while (WiFi.waitForConnectResult() != WL_CONNECTED)
+    {
+        //Serial.println("Connection Failed! Rebooting...");
+        delay(5000);
+        ESP.restart();
+    }
+    
+#if 1
+    setup_telnet2serial();
+#else
 	Serial.begin(115200);
 	while (!Serial) delay(1000);
-	
+#endif
+
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP()); // This prints the IP address
+
     setup_c4001();
 	setup_ota();
 	

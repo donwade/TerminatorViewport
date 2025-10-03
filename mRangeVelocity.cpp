@@ -51,10 +51,12 @@ void setup_c4001()
     M5.begin();
 #endif
 
+#if 0
     Serial.begin(115200);
 
     while (!Serial)
         ;
+#endif
 
     while (!radar.begin())
     {

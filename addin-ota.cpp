@@ -31,20 +31,6 @@ void setup_ota()
 
 	int32_t val;
 
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(MY_SSID, MY_SSID_PASSWORD);
-
-    while (WiFi.waitForConnectResult() != WL_CONNECTED)
-    {
-        //Serial.println("Connection Failed! Rebooting...");
-        delay(5000);
-        ESP.restart();
-    }
-
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP()); // This prints the IP address
-
-
   /*normal values.
   TRACE ota_setup:460   Xtal frequency = 40 mHz 								  
   TRACE ota_setup:461   CpuFrequency = 240 mHz
