@@ -75,6 +75,8 @@ void loop() {
 
     loop_c4001(); 
 	loop_ota();
+
+	TestInstance.println("x");
 	
 	if (mainMenu.isEnabled()) {
 		mainMenu.loop();
