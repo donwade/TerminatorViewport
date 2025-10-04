@@ -20,21 +20,16 @@ extern uint32_t uptime(void);
 #define DEFAULT_FONT &fonts::FreeMono12pt7b
 
 //------------------------------------------------------------
-typedef struct 
+typedef struct
 {
-	int8_t chargeDirection;
-	float batt_mV;
-    int usb_mV;
-    int usbMin_mV;
-    int usbMax_mV;
-	int percent;
-	int current_mA;
+    int8_t	chargeDirection;
+    float	batt_mV;
+    int		usb_mV;
+    int		usbMin_mV;
+    int		usbMax_mV;
+    int		percent;
+    int		current_mA;
 }batt_stats;
 
-extern bool getBatteryStats (batt_stats *reply); 
+extern bool getBatteryStats(batt_stats *reply);
 extern void setBrightness(uint8_t val);
-
-
-
-
-

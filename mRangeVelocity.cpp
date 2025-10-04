@@ -13,6 +13,7 @@
 
 #ifdef ARDUINO_M5STACK_CORE2
 #include <M5Unified.h>
+#include "viewController.h"
 #endif
 
 #include "DFRobot_C4001.h"
@@ -43,18 +44,8 @@ DFRobot_C4001_UART radar(&Serial1, 9600, /*rx*/ 13, /*tx*/ 14);
 DFRobot_C4001_UART radar(&Serial1, 9600);
 #endif
 #endif
-
 void setup_c4001()
 {
-
-#ifdef ARDUINO_M5STACK_CORE2
-    M5.begin();
-#endif
-
-    Serial.begin(115200);
-
-    while (!Serial)
-        ;
 
     while (!radar.begin())
     {
@@ -87,9 +78,9 @@ void setup_c4001()
      * max Detection range Maximum distance, unit cm, range 2.4~20m (240~2000)
      * thres Target detection threshold, dimensionless unit 0.1, range 0~6553.5 (0~65535)
      */
-    if (radar.setDetectThres(/*min*/ 1234,
-    						 /*max*/ 2000,
-    						 /*thres*/ 18.))
+    if (radar.setDetectThres(/*min*/ 33,
+                             /*max*/ 2000,
+                             /*thres*/ 18.))
         Serial.println("set detect threshold successfully");
 
     // set Fretting Detection
@@ -111,46 +102,69 @@ void setup_c4001()
 
 void loop_c4001()
 {
-	static float fmax = -100;
-	static float fmin = 0;
-	static bool isIdle = true;
-	
+    static float fmax = -100;
+    static float fmin = 0;
+    static bool isIdle = true;
+    static float oldRange = -1.0;
+
+	// must read target number or any other val req == 0!!!!
 	uint8_t tnum = radar.getTargetNumber();
-	float speedMpS =radar.getTargetSpeed();
-	float speedkpH = speedMpS * 60./ 1000.;
-	float range = radar.getTargetRange();
-	uint32_t energyNow = radar.getTargetEnergy();
 	
+    float range = radar.getTargetRange();
+
+    if (range != oldRange)
+    {
+        if (!range)
+        {
+            colourBarX(_GREEN, 10);
+        }
+        else
+        {
+            setToggleColors(_RED, _BLUE, 10);
+		}
+        oldRange = range;
+    }
+
     if (range)
     {
-    	if (isIdle) Serial.println();
-    	
-    	isIdle = false;
-    	
-	    Serial.print("target number = ");
-	    Serial.println(tnum); // must exist
-	    Serial.printf("target Speed  = %4.1f m/S %4.1f kpH\n", speedMpS, speedkpH);
+		float speedMpS = radar.getTargetSpeed();
+		float speedkpH = speedMpS * 60. / 1000.;
+		uint32_t energyNow = radar.getTargetEnergy();
+		
+        if (isIdle)
+            Serial.println();
 
-	    Serial.print("target range  = ");
-	    Serial.print(range);
-	    Serial.println(" m");
+        isIdle = false;
 
-	    Serial.print("target energy    = ");
-	    Serial.println(energyNow);
+        Serial.print("target number = ");
+        Serial.println(tnum);     // must exist
+        Serial.printf("target Speed  = %4.1f m/S %4.1f kpH\n", speedMpS, speedkpH);
 
-		if (energyNow)
-		{
-		    float dbNow = radar.getTargetEnergyDb();
-		    
-		    if (dbNow > fmax) fmax = dbNow;
-		    if (dbNow < fmin) fmin = dbNow;
-		    Serial.printf("%5.3f < %5.3f < %5.3f\n\n", fmin, dbNow, fmax);
-		}
-	}
-	else
-	{
-		Serial.print('.');
-		isIdle = true;
-	}
+        Serial.print("target range  = ");
+        Serial.print(range);
+        Serial.println(" m");
+
+        Serial.print("target energy    = ");
+        Serial.println(energyNow);
+
+        if (energyNow)
+        {
+            float dbNow = radar.getTargetEnergyDb();
+
+            if (dbNow > fmax)
+                fmax = dbNow;
+
+            if (dbNow < fmin)
+                fmin = dbNow;
+
+            Serial.printf("%5.3f < %5.3f < %5.3f\n\n", fmin, dbNow, fmax);
+        }
+    }
+    else
+    {
+        //Serial.print('.');
+        isIdle = true;
+    }
+
     delay(100);
 }

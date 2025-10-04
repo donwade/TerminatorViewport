@@ -4,15 +4,12 @@ extern char *formattedTimeRTC();
 
 typedef struct
 {
-     uint32_t started;
-     uint32_t requested;
+    uint32_t	started;
+    uint32_t	requested;
 }stopwatch;
 
-extern void stpWatchStart (stopwatch *who);
-extern char   *stpWatchString (stopwatch *who, char *hms);
-extern time_t stpWatchGetElapsedTime (stopwatch *who);
-extern char *secondsToHMS (time_t epoch_time, char *hms);
+extern void stpWatchStart(stopwatch *who);
+extern char *stpWatchString(stopwatch *who, char *hms);
+extern time_t stpWatchGetElapsedTime(stopwatch *who);
+extern char *secondsToHMS(time_t epoch_time, char *hms);
 extern void initRTCfromNTP(void);
-
-
-
