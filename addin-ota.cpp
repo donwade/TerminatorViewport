@@ -9,48 +9,208 @@
 
 #include "watchdogs.h"
 #include "addin-ota.h"
+#include "RTC.h"
+#include "nv.h"
 
 #include "common.h"
 
 //#include "esp_brownout_detector.h" // Include the brownout detector header
-
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
+#include "nvs_flash.h"
+#include "nvs.h"
 #include "soc/soc.h"
 //#include "soc/cpu.h"
 #include "soc/rtc_cntl_reg.h"
 #include "driver/rtc_cntl.h"
 
+#ifdef CONFIG_BROWNOUT_DET_LVL
+#define BROWNOUT_DET_LVL CONFIG_BROWNOUT_DET_LVL
+#else
+#define BROWNOUT_DET_LVL 5
+#endif //CONFIG_BROWNOUT_DET_LVL
+
+#define CONFIG_BROWNOUT_DET_LVL_SEL_5 1
+
+int32_t nResets;
+int32_t nBrownoutCtr;
+
+//--------------------------------------------------------------
+//https://stackoverflow.com/questions/73200166/exception-handling-for-brownout-detector-was-trigerred
+
+#include <rom/rtc.h>
+
+uint8_t getResetReason(char *msg, RESET_REASON reason)
+{
+  Serial.printf("\n%s ", msg);
+
+  if (reason < 10 && reason > 6)
+  {
+    int32_t value = 0; // default
+  	nvIncrementValue("DOG_CTR", &value);
+	TRACE ("****** WATCHDOG RESET FOUND\n");
+  }
+  
+  switch (reason)
+  {
+    /**<1, Vbat power on reset*/
+    case 1 : Serial.println ("POWERON_RESET");break;          
+    
+    /**<3, Software reset digital core*/
+    case 3 : Serial.println ("SW_RESET");break;               
+    
+    /**<4, Legacy watch dog reset digital core*/
+    case 4 : Serial.println ("OWDT_RESET");break;             
+    
+    /**<5, Deep Sleep reset digital core*/
+    case 5 : Serial.println ("DEEPSLEEP_RESET");break;        
+    
+    /**<6, Reset by SLC module, reset digital core*/
+    case 6 : Serial.println ("SDIO_RESET");break;             
+    
+    /**<7, Timer Group0 Watch dog reset digital core*/
+    case 7 : Serial.println ("TG0WDT_SYS_RESET");break;       
+    
+    /**<8, Timer Group1 Watch dog reset digital core*/
+    case 8 : Serial.println ("TG1WDT_SYS_RESET");break;       
+    
+    /**<9, RTC Watch dog Reset digital core*/
+    case 9 : Serial.println ("RTCWDT_SYS_RESET");break;       
+    
+    /**<10, Instrusion tested to reset CPU*/
+    case 10 : Serial.println ("INTRUSION_RESET");break;       
+    
+    /**<11, Time Group reset CPU*/
+    case 11 : Serial.println ("TGWDT_CPU_RESET");break;       
+    
+    /**<12, Software reset CPU*/
+    case 12 : Serial.println ("SW_CPU_RESET");break;          
+    
+    /**<13, RTC Watch dog Reset CPU*/
+    case 13 : Serial.println ("RTCWDT_CPU_RESET");break;      
+    
+    /**<14, for APP CPU, reseted by PRO CPU*/
+    case 14 : Serial.println ("EXT_CPU_RESET");break;         
+    
+    /**<15, Reset when the vdd voltage is not stable*/
+    case 15 : Serial.println ("RTCWDT_BROWN_OUT_RESET");break;
+    
+    /**<16, RTC Watch dog reset digital core and rtc module*/
+    case 16 : Serial.println ("RTCWDT_RTC_RESET");break;      
+    
+    default : Serial.println ("NO_MEAN");
+  }
+  
+  Serial.println();
+  return reason;
+}
+
+
+//interrupt_handler_t void low_voltage_save(void *notused) {
+
+ void low_voltage_save(void *notused) 
+{
+	int32_t nBrownoutCtr = 0;
+	
+	bool pass = nvIncrementValue("BROWNOUT_CTR", &nBrownoutCtr);
+	if (!pass)
+	{
+		TRACE("\nVirgin :Set Brownout to 1 !\n");
+		nBrownoutCtr = 1;
+		nvSetValue("BROWNOUT_CTR", nBrownoutCtr);
+	}
+	
+	TRACE("brownout value is %d\n", nBrownoutCtr);
+
+
+	// stop brown interrupts.
+	REG_WRITE(RTC_CNTL_INT_CLR_REG, RTC_CNTL_BROWN_OUT_INT_CLR);
+
+	//halt the cpu. Stop any damage.
+	esp_cpu_stall(!xPortGetCoreID());
+
+	ets_printf("\r\nBrownout detector was triggered\r\n\r\n");
+	//esp_restart_noos();
+
+	while(1)
+	{
+	    vTaskDelay(1 / portTICK_PERIOD_MS);
+	}
+
+}
+
+
+
+/*esp_err_t rtc_isr_register(intr_handler_t handler,
+						  	 void* handler_arg,
+                             uint32_t rtc_intr_mask, // set for brown out 
+                             uint32_t flags);		 // =0, don't care about caching
+*/
+
+void brownout_init()
+{
+
+    REG_WRITE(RTC_CNTL_BROWN_OUT_REG,
+            RTC_CNTL_BROWN_OUT_ENA /* Enable BOD */
+            | RTC_CNTL_BROWN_OUT_PD_RF_ENA /* Automatically power down RF */
+            /* Reset timeout must be set to >1 even if BOR feature is not used */
+            | (2 << RTC_CNTL_BROWN_OUT_RST_WAIT_S)
+            | (BROWNOUT_DET_LVL << RTC_CNTL_DBROWN_OUT_THRES_S));
+
+    ESP_ERROR_CHECK( rtc_isr_register(low_voltage_save, 
+                     				  NULL, 						//handler_arg
+                                      RTC_CNTL_BROWN_OUT_INT_ENA_M, //rtc_intr_mask
+                     				  0	)							//uint32_t flags
+                    );
+
+    printf("Initialized BOD\n");
+
+    REG_SET_BIT( RTC_CNTL_INT_ENA_REG, 
+				 RTC_CNTL_BROWN_OUT_INT_ENA_M);
+
+	int32_t nBrownoutCtr = 0;
+	nvGetValue("BROWNOUT_CTR", &nBrownoutCtr);
+	TRACE("brownout value is %d\n", nBrownoutCtr);
+}
+
+
+extern void web_setup(void);
+extern void web_loop(void);
 
 //-------------------------------------------------------------
 //void app_main()
-void setup_ota()
+void ota_setup()
 {
 
 	int32_t val;
 
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(MY_SSID, MY_SSID_PASSWORD);
+	// Initialize NVS
+	brownout_init();
 
-    while (WiFi.waitForConnectResult() != WL_CONNECTED)
-    {
-        //Serial.println("Connection Failed! Rebooting...");
-        delay(5000);
-        ESP.restart();
-    }
+	init_NVram();
 
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP()); // This prints the IP address
+	val = 0;
+	nvIncrementValue("RESET_CTR", &val);
+	TRACE("reset count = %d\n", val);
 
+	val = getResetReason("CPU0: ", rtc_get_reset_reason(0));
+	nvSetValue("CPU0_RESET", val);
+	nvGetValue("CPU0_RESET", &val);
 
-  /*normal values.
+	val = getResetReason("CPU1: ", rtc_get_reset_reason(1));
+	nvSetValue("CPU1_RESET", val);
+	nvGetValue("CPU1_RESET", &val);
+
+/*
+  // https://deepbluembedded.com/esp32-change-cpu-speed-clock-frequency/
+
+  // normal values.
   TRACE ota_setup:460   Xtal frequency = 40 mHz 								  
   TRACE ota_setup:461   CpuFrequency = 240 mHz
   TRACE ota_setup:462   APB bus frequency = 80 mHz
-  */
-
+  
   // moving clock to CPU clock to 40 
   //  look at XTAL table below, find the XTAL we have (its 40)
   //  find the divider value (its 10 for us)
@@ -59,9 +219,10 @@ void setup_ota()
   //  ( 40  20) = 10  <<< For 40MHz XTAL
   //  ( 26)     = 13  <<< For 26MHz XTAL
   //  ( 24)     = 12  <<< For 24MHz XTAL
+*/
 
 
-	//setCpuFrequencyMhz(CPU_FREQ);  // 10 thru 40 ... fails on wifi
+	setCpuFrequencyMhz(CPU_FREQ);  // 10 thru 40 ... fails on wifi
 
 	Serial.println();
 	TRACE ("-------- CPU FREQ %d/240 -------------------\n", CPU_FREQ);
@@ -70,10 +231,15 @@ void setup_ota()
 	TRACE ("APB bus frequency = %d mHz (normally 80)\n",  getApbFrequency()/1000000);
 
 
+	#if 0
+		TRACE("initRTCfromNTP NOT being called. Coin testing\n");
+	#else
+		initRTCfromNTP();
+	#endif
+
 	// Port defaults to 3232
 	ArduinoOTA.setPort(3232);
-	ArduinoOTA.setTimeout(3000);
-	
+
 	// Hostname defaults to esp3232-[MAC]
 	ArduinoOTA.setHostname(REMOTE_HOSTNAME);
 	Serial.printf("remote hostname = %s.local\n", REMOTE_HOSTNAME);
@@ -118,6 +284,8 @@ void setup_ota()
 	  }
 	});
 
+
+
 	ArduinoOTA.begin();
 
 	Serial.println("Ready");
@@ -126,7 +294,7 @@ void setup_ota()
 
 }
 
-void loop_ota() 
+void ota_loop() 
 {
 
 #if 0
@@ -243,9 +411,9 @@ void setupLightSleepByTimer(uint32_t timeMs)
 
 void enterLightSleepTimer(void)
 {
-	uint32_t now = millis();
+	uint32_t now = getUTCfromRTC();
 	esp_light_sleep_start();
-	TRACE("exit sleep.. time = %d000 mS\n", millis() - now);
+	TRACE("exit sleep.. time = %d000 mS\n", getUTCfromRTC() - now);
 }
 
 void setupSleepByGPIO(gpio_num_t wakeupPin) 
