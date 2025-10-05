@@ -184,8 +184,11 @@ void setup()
     //pinMode(PIN_FAN_PMW, OUTPUT);
     //pinMode(PIN_LED, OUTPUT);
 
-    pinMode(P32_WHT_RADAR, INPUT);
-    setupSleepByGPIO((gpio_num_t)P32_WHT_RADAR);
+	
+    //pinMode(P32_WHT_RADAR, INPUT);
+    //setupSleepByGPIO((gpio_num_t)P32_WHT_RADAR);
+
+
     setupLightSleepByTimer(3000);
 
     // turn off led

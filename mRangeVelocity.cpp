@@ -73,6 +73,7 @@ void setup_c4001()
     Serial.println(data.initStatus);
     Serial.println();
 
+
     /*
      * min Detection range Minimum distance, unit cm, range 0.3~20m (30~2000), not exceeding max, otherwise the function is abnormal.
      * max Detection range Maximum distance, unit cm, range 2.4~20m (240~2000)
@@ -80,13 +81,39 @@ void setup_c4001()
      */
     if (radar.setDetectThres(/*min*/ 33,
                              /*max*/ 2000,
-                             /*thres*/ 18.))
+                             /*thres*/ 9.))
         Serial.println("set detect threshold successfully");
+
+
+	if(radar.setDetectionRange(/*min*/30, /*max*/1000, /*trig*/1000))
+	{
+		Serial.println("set detection range successfully!");
+	}
+
 
     // set Fretting Detection
     radar.setFrettingDetection(eOFF);
     //radar.setFrettingDetection(eON);
 
+	// set trigger sensitivity 0 - 9
+	if(radar.setTrigSensitivity(1))
+	{
+		Serial.println("set trig sensitivity successfully!");
+	}
+	
+	// set keep sensitivity 0 - 9
+	if(radar.setKeepSensitivity(2))
+	{
+		Serial.println("set keep sensitivity successfully!");
+	}
+	/*
+	* trig Trigger delay, unit 0.01s, range 0~2s (0~200)
+	* keep Maintain the detection timeout, unit 0.5s, range 2~1500 seconds (4~3000)
+	*/
+	if(radar.setDelay(/*trig*/100, /*keep*/4))
+	{
+		Serial.println("set delay successfully!");
+	}
 
     // get confige params
     Serial.print("min range = ");

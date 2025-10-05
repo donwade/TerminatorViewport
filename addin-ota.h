@@ -1,5 +1,3 @@
-#define LOCAL_HOSTNAME "m5-core2"
-
 extern void setupLightSleepByTimer(uint32_t timeMs);
 extern void enterLightSleepTimer(void);
 
