@@ -107,7 +107,7 @@ void * savingMode(BUTTON_EVENT some_key)
     cprintf(_CYAN, lineno++, "%s", formattedTimeRTC());
 
 
-    cprintf(_GREEN, lineno++, "DNS name = %s", REMOTE_HOSTNAME);
+    cprintf(_GREEN, lineno++, "DNS= %s", REMOTE_HOSTNAME);
     cprintf(_GREEN, lineno++, "%s", pingStatus);
 
 /*
