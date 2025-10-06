@@ -14,6 +14,7 @@
 #ifdef ARDUINO_M5STACK_CORE2
 #include <M5Unified.h>
 #include "viewController.h"
+#include "watchdogs.h"
 #endif
 
 #include "DFRobot_C4001.h"
@@ -44,6 +45,8 @@ DFRobot_C4001_UART radar(&Serial1, 9600, /*rx*/ 13, /*tx*/ 14);
 DFRobot_C4001_UART radar(&Serial1, 9600);
 #endif
 #endif
+
+
 void setup_c4001()
 {
 
@@ -55,22 +58,22 @@ void setup_c4001()
 
     Serial.println("Device connected!");
 
-    // speed Mode
-    radar.setSensorMode(eSpeedMode);
+#if 0
+    radar.setSensorMode(eExitMode);     // motion detection
+#else
+    radar.setSensorMode(eSpeedMode);	// speed detection
+#endif
 
     sSensorStatus_t data;
     data = radar.getStatus();
     //  0 stop  1 start
-    Serial.print("work status  = ");
-    Serial.println(data.workStatus);
+    Serial.printf("work status = %s\n", data.workStatus ?  "running" :"stopped");
 
     //  0 is exist   1 speed
-    Serial.print("work mode  = ");
-    Serial.println(data.workMode);
+    Serial.printf("work mode  = %s\n", data.workMode ? "speed" : "motion" );
 
     //  0 no init    1 init success
-    Serial.print("init status = ");
-    Serial.println(data.initStatus);
+    Serial.printf("init status = %s\n", data.initStatus ? "init OK" : "not inited");
     Serial.println();
 
 
@@ -82,14 +85,21 @@ void setup_c4001()
     if (radar.setDetectThres(/*min*/ 33,
                              /*max*/ 2000,
                              /*thres*/ 9.))
+    {
         Serial.println("set detect threshold successfully");
+	}
 
-
-	if(radar.setDetectionRange(/*min*/30, /*max*/1000, /*trig*/1000))
+	if(radar.setDetectionRange(/*min*/30, /*max*/2000, /*trig*/2000))
 	{
 		Serial.println("set detection range successfully!");
 	}
 
+
+	// doesn't work if in speed mode
+	if (radar.setPwm(1, 50, 3)) // 0=nobody 100=somebody 3*64ms = .180 s
+	{
+		Serial.println("pmw set ");
+	}
 
     // set Fretting Detection
     radar.setFrettingDetection(eOFF);
@@ -106,42 +116,66 @@ void setup_c4001()
 	{
 		Serial.println("set keep sensitivity successfully!");
 	}
+
+	
 	/*
 	* trig Trigger delay, unit 0.01s, range 0~2s (0~200)
 	* keep Maintain the detection timeout, unit 0.5s, range 2~1500 seconds (4~3000)
 	*/
-	if(radar.setDelay(/*trig*/100, /*keep*/4))
+	
+	if(radar.setDelay(10  /* uint8_t  x .01s trig delay*/,
+					   4  /* uint16_t x .5s  delay when detected*/))
 	{
 		Serial.println("set delay successfully!");
 	}
 
-    // get confige params
-    Serial.print("min range = ");
-    Serial.println(radar.getTMinRange());
-    Serial.print("max range = ");
-    Serial.println(radar.getTMaxRange());
-    Serial.print("threshold range = ");
-    Serial.println(radar.getThresRange());
-    Serial.print("fretting detection = ");
-    Serial.println(radar.getFrettingDetection());
+    // get configure params
+    Serial.printf("getTMinRange range = %d\n", radar.getTMinRange());
+    Serial.printf("getTMaxRange range = %d\n\n", radar.getTMaxRange());
+    
+    Serial.printf("threshold range = %d\n", radar.getThresRange());
+    Serial.printf("fretting detection = %d\n", radar.getFrettingDetection());
+
+	Serial.printf("\nkeepSensitivity = %d\n", radar.getKeepSensitivity());
+	Serial.printf("trigSensitivity = %d\n\n", radar.getTrigSensitivity());
+
+    sPwmData_t foo = radar.getPwm();
+    Serial.printf("pmw1 quiet = %d\n", foo.pwm1);
+    Serial.printf("pmw2 detect = %d\n", foo.pwm2);
+    Serial.printf("time = %d mS\n\n", foo.timer * 64);
+
+	Serial.printf("keep time = %d\n", radar.getKeepTimerout());
+	Serial.printf("trig delay = %d\n", radar.getTrigDelay());
+	
+    Serial.printf("c4001 setup done\n--------------------\n\n");
+    
 }
 
 
+#define USE_RANGE
+
 void loop_c4001()
 {
+	kickDog();
     static float fmax = -100;
     static float fmin = 0;
     static bool isIdle = true;
-    static float oldRange = -1.0;
-
-	// must read target number or any other val req == 0!!!!
-	uint8_t tnum = radar.getTargetNumber();
+	uint8_t tnum = 0;
 	
-    float range = radar.getTargetRange();
+#ifdef USE_RANGE
+    static float stateOld = -1.0;
+	// must read target number or any other val req == 0!!!!
+	tnum = radar.getTargetNumber();
+    float stateNow = radar.getTargetRange();
+#else
+	static bool stateOld = true;
+	bool stateNow = bPersonDetected();
+	// must read target number or any other val req == 0!!!!
+#endif
 
-    if (range != oldRange)
+    if (stateNow != stateOld)
     {
-        if (!range)
+        if (!stateNow)
         {
             colourBarX(_GREEN, 10);
         }
@@ -149,14 +183,16 @@ void loop_c4001()
         {
             setToggleColors(_RED, _BLUE, 10);
 		}
-        oldRange = range;
+        stateOld = stateNow;
     }
 
-    if (range)
+
+	if (stateNow)
     {
 		float speedMpS = radar.getTargetSpeed();
 		float speedkpH = speedMpS * 60. / 1000.;
 		uint32_t energyNow = radar.getTargetEnergy();
+		float range = radar.getTargetRange();
 		
         if (isIdle)
             Serial.println();
@@ -193,5 +229,23 @@ void loop_c4001()
         isIdle = true;
     }
 
-    delay(100);
+	delay(100);
 }
+
+
+/*
+bool bPersonDetected(void) 
+{
+	//radar.getTargetNumber();
+
+	sSensorStatus_t foo = radar.getStatus();
+	Serial.printf("foo.workStatus = %d\n", foo.workStatus);
+	Serial.printf("foo.workMode = %d\n", foo.workMode);
+	Serial.printf("foo.initStatus = %d\n\n", foo.initStatus);
+
+	return foo.workMode;
+
+	//no it hangs
+	//return radar.getIoPolaity();
+}
+*/
